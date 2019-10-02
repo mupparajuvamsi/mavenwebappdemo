@@ -1,0 +1,40 @@
+node{
+     
+    stage('SCM Checkout'){
+        git url: 'https://github.com/mupparajuvamsi/mavenwebappdemo.git',branch: 'master'
+    }
+    
+    stage(" Maven Clean Package"){
+      def mavenHome =  tool name: "Maven-3.5.6", type: "maven"
+      def mavenCMD = "${mavenHome}/bin/mvn"
+      sh "${mavenCMD} clean package -f mavenwebappdemo/pom.xml"
+      
+    } 
+    
+    
+    stage('Build Docker Image'){
+        sh 'docker build -t mupparajuvamsi/mavenwebappdemo .'
+    }
+    
+    stage('Push Docker Image'){
+        withCredentials([string(credentialsId: 'Docker_Hub_Pwd', variable: 'Docker_Hub_Pwd')]) {
+          sh "docker login -u mupparajuvamsi -p ${Docker_Hub_Pwd}"
+        }
+        sh 'docker push mupparajuvamsi/mavenwebappdemo'
+     }
+     
+      stage('Run Docker Image In Dev Server'){
+        
+        def dockerRun = ' docker run  -d -p 8080:8080 --name mavenwebappdemo mupparajuvamsi/mavenwebappdemo'
+         
+         sshagent(['DOCKER_SERVER']) {
+          sh 'ssh -o StrictHostKeyChecking=no ubuntu@172.31.20.72 docker stop mavenwebappdemo || true'
+          sh 'ssh  ubuntu@172.31.20.72 docker rm mavenwebappdemo || true'
+          sh 'ssh  ubuntu@172.31.20.72 docker rmi -f  $(docker images -q) || true'
+          sh "ssh  ubuntu@172.31.20.72 ${dockerRun}"
+       }
+       
+    }
+     
+     
+}
